@@ -1,30 +1,31 @@
 import math
 from fastapi import FastAPI, Request
 
-# --- Algoritmi seadusted ja konstandid (Kaalutud prognoosiga Glassbox v4.0) ---
+# --- Algoritmi seadusted ja konstandid (Lihtsustatud ja optimeeritud Glassbox v5.0) ---
 
-# SOOVITUS #2: Q-väärtused on seatud natuke kõrgemale kui eelviimases katses,
-# et vähendada võlgnevuse kulu ja sihtida paremat tasakaalu.
+# SOOVITUS #1: Q-väärtused on seatud, et saavutada parem tasakaal, tuginedes
+# varasemale edukale mudelile (kogukulu 6786). Eesmärk on vähendada võlgnevuse kulu.
 OPTIMIZED_Q_VALUES = {
-    "retailer": 1.3,
-    "wholesaler": 1.5,
-    "distributor": 1.7,
-    "factory": 2.0,
+    "retailer": 1.5,
+    "wholesaler": 1.8,
+    "distributor": 2.1,
+    "factory": 2.5,
 }
 
-# Need parameetrid on endiselt optimaalsed.
+# Tagasi lihtsa ja stabiilse prognoosimise juurde.
 MOVING_AVERAGE_PERIOD = 4
 SMOOTHING_PERIOD = 3
 
 
 class BeerBot:
     """
-    Kasutab kaalutud liikuvat keskmist, et saavutada parem stabiilsus ja reageerimisvõime.
+    Naaseb stabiilse ja tõestatud loogika juurde, keskendudes ainult Q-väärtuste
+    peenhäälestamisele, et saavutada eesmärgiks seatud kogukulu.
     """
 
     def _get_demand_forecast(self, weeks: list) -> float:
         """
-        SOOVITUS #1: Kasutame kaalutud liikuvat keskmist prognoosi silumiseks.
+        Kasutab lihtsat, mitte-kaalutud liikuvat keskmist. See on kõige stabiilsem meetod.
         """
         history = [week["roles"]["retailer"]["incoming_orders"] for week in weeks]
         if not history: return 8.0
@@ -32,16 +33,7 @@ class BeerBot:
         start_index = max(0, len(history) - MOVING_AVERAGE_PERIOD)
         relevant_history = history[start_index:]
         
-        if len(relevant_history) < MOVING_AVERAGE_PERIOD:
-            # Kui ajalugu on lühem kui meie periood, kasutame lihtsat keskmist
-            return sum(relevant_history) / len(relevant_history)
-        
-        # Kaalud: viimane nädal on kõige olulisem, vanemad vähem.
-        weights = [0.1, 0.2, 0.3, 0.4] # [vanim, ..., uusim]
-        
-        weighted_sum = sum(relevant_history[i] * weights[i] for i in range(len(weights)))
-        
-        return weighted_sum
+        return sum(relevant_history) / len(relevant_history)
 
     def _calculate_order_for_role(self, role: str, state: dict) -> int:
         current_week_num = state["week"]
@@ -60,7 +52,7 @@ class BeerBot:
 
         inventory_position = inventory - backlog + arriving_shipments
         
-        # Naaseme lihtsa ja otsese loogika juurde, mis parandab kogu vea kohe.
+        # Parandame kogu laovaru vea koheselt. See on kõige otsesem ja ennustatavam meetod.
         inventory_error = target_inventory - inventory_position
         order = demand_forecast + inventory_error
 
@@ -83,8 +75,8 @@ async def handle_decision(request: Request):
         return {
             "ok": True,
             "student_email": "eesnimi.perenimi@taltech.ee", # MUUDA SEE ÄRA!
-            "algorithm_name": "Weighted Glassbox v4.0",
-            "version": "v1.6.0",
+            "algorithm_name": "Simplified Glassbox v5.0",
+            "version": "v1.7.0",
             "supports": {"blackbox": False, "glassbox": True},
             "message": "BeerBot ready"
         }
