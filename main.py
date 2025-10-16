@@ -7,14 +7,14 @@ from fastapi import FastAPI, Request
 # mis on optimeeritud kulude minimeerimiseks. Need on kõige olulisemad parameetrid.
 # Madalam Q-väärtus jaemüüjal peegeldab kiiremat reageerimist kliendi nõudlusele.
 OPTIMIZED_Q_VALUES = {
-    "retailer": 0.8,
-    "wholesaler": 1.2,
-    "distributor": 1.8,
-    "factory": 2.4,
+    "retailer": 0.6,
+    "wholesaler": 0.9,
+    "distributor": 1.3,
+    "factory": 1.8,
 }
 
 # Periood (nädalates) liikuva keskmise arvutamiseks nõudluse prognoosimisel.
-MOVING_AVERAGE_PERIOD = 5
+MOVING_AVERAGE_PERIOD = 4
 
 # Silumisperiood (nädalates) mängu alguses, et vältida järske tellimusi.
 SMOOTHING_PERIOD = 7
