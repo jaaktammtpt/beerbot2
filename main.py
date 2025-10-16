@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 OPTIMIZED_Q_VALUES = {
     "retailer": 1.5,
     "wholesaler": 2.5,
-    "distributor": 3.5,
+    "distributor": 2.5,
     "factory": 4.5,
 }
 
