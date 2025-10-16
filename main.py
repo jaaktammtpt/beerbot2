@@ -102,7 +102,7 @@ async def handle_decision(data: RequestBody):
 
         return {
             "ok": True,
-            "student_email": "firstname.lastname@taltech.ee", # ASENDA OMA E-POSTIGA
+            "student_email": "jaakta@taltech.ee", # ASENDA OMA E-POSTIGA
             "algorithm_name": "FastAPI_SmoothedQModel",
             "version": "v1.2.0",
             "supports": {"blackbox": True, "glassbox": False},
@@ -132,3 +132,6 @@ async def handle_decision(data: RequestBody):
 
     # Tagastab tellimused järgmiseks nädalaks [19]
     return {"orders": orders}
+
+# Koodi käivitamiseks lokaalselt (kasutades uvicorn):
+# uvicorn main:app --reload
