@@ -1,95 +1,67 @@
 import math
 from fastapi import FastAPI, Request
 
-# --- Algoritmi seadusted ja konstandid (Glassbox strateegia) ---
+# --- Algoritmi seadusted ja konstandid (Stabiliseeritud Glassbox v3.0) ---
 
-# SOOVITUS #1: Q-väärtused on drastiliselt vähendatud, kuna süsteem on stabiilne.
-# Eesmärk on hoida minimaalset varu, mis on vajalik tarnetsükli katmiseks.
+# SOOVITUS #2: Q-väärtused on peenhäälestatud, et tabada täpselt sihtmärgi laokulu.
 OPTIMIZED_Q_VALUES = {
-    "retailer": 1.1,
-    "wholesaler": 1.3,
-    "distributor": 1.5,
-    "factory": 1.8, # Tehas vajab veidi rohkem pikema tootmistsükli tõttu
+    "retailer": 1.0,
+    "wholesaler": 1.2,
+    "distributor": 1.4,
+    "factory": 1.7,
 }
 
-# Jätame reageerimiskiiruse kõrgeks.
-MOVING_AVERAGE_PERIOD = 4
+# SOOVITUS #1: See on kõige olulisem uus parameeter. See silub tellimusi ja vähendab volatiilsust.
+# Parandame igal nädalal 70% laovaru veast, mitte 100%.
+CORRECTION_FACTOR = 0.7
 
-# SOOVITUS #2: Lühendame silumisperioodi, kuna glassbox süsteem stabiliseerub kiiremini.
+# Need parameetrid on endiselt optimaalsed.
+MOVING_AVERAGE_PERIOD = 4
 SMOOTHING_PERIOD = 3
 
 
 class BeerBot:
     """
-    Kapseldab kogu loogika. See implementatsioon kasutab "Glassbox" strateegiat,
-    kus kõik rollid baseerivad oma otsused tegelikul kliendi nõudlusel.
+    Täppishäälestatud ja stabiliseeritud "Glassbox" strateegia.
     """
 
     def _get_demand_forecast(self, weeks: list) -> float:
-        """
-        Arvutab oodatava nõudluse, kasutades AINULT jaemüüja andmeid.
-        See on "Glassbox" strateegia süda.
-        """
-        # KÕIK rollid vaatavad tegelikku kliendi nõudlust (jaemüüja sissetulevad tellimused).
         history = [week["roles"]["retailer"]["incoming_orders"] for week in weeks]
-
-        if not history:
-            return 8.0  # Mõistlik algväärtus
-
+        if not history: return 8.0
         start_index = max(0, len(history) - MOVING_AVERAGE_PERIOD)
-        relevant_history = history[start_index:]
-        
-        return sum(relevant_history) / len(relevant_history)
+        return sum(history[start_index:]) / len(history[start_index:])
 
     def _calculate_order_for_role(self, role: str, state: dict) -> int:
-        """
-        Arvutab ühe rolli tellimuse koguse.
-        """
         current_week_num = state["week"]
         weeks_history = state["weeks"]
         
         role_data = weeks_history[-1]["roles"][role]
         inventory = role_data["inventory"]
         backlog = role_data["backlog"]
-        
-        # Arvutame "pipeline" ehk teel oleva kauba koguse
-        # See on kõik tellimused, mis on tehtud, aga pole veel kohale jõudnud.
-        pipeline = 0
-        if current_week_num > 1:
-            # Viimase 3 nädala tellimused on tavaliselt hea hinnang teel olevale kaubale
-            start_index = max(0, len(weeks_history) - 4) 
-            for week in weeks_history[start_index:-1]:
-                 if role in week["orders"]:
-                    pipeline += week["orders"][role]
+        arriving_shipments = role_data["arriving_shipments"]
 
-        # 1. Prognoosi oodatav nõudlus (kõigil sama)
         demand_forecast = self._get_demand_forecast(weeks_history)
 
-        # 2. Arvuta sihttase laovarule
         base_q = OPTIMIZED_Q_VALUES[role]
-        
-        if current_week_num < SMOOTHING_PERIOD:
-            effective_q = base_q * (current_week_num / SMOOTHING_PERIOD)
-        else:
-            effective_q = base_q
-            
+        effective_q = base_q * (current_week_num / SMOOTHING_PERIOD) if current_week_num < SMOOTHING_PERIOD else base_q
         target_inventory = effective_q * demand_forecast
 
-        # 3. Arvuta praegune laovaru positsioon
-        inventory_position = inventory - backlog + pipeline
+        inventory_position = inventory - backlog + arriving_shipments
         
-        # 4. Arvuta tellimus
-        order = demand_forecast + (target_inventory - inventory_position)
+        # Arvutame, kui palju tuleks laovaru korrigeerida
+        inventory_error = target_inventory - inventory_position
+        
+        # RAKENDAME SUMMUTUSTEGURIT: korrigeerime ainult osa veast
+        correction_amount = inventory_error * CORRECTION_FACTOR
+
+        # Lõplik tellimus = katame nõudluse + teeme sujuva korrektsiooni
+        order = demand_forecast + correction_amount
 
         return max(0, math.ceil(order))
 
     def get_orders(self, state: dict) -> dict:
-        """
-        Genereerib tellimused kõikidele rollidele.
-        """
         roles = ["retailer", "wholesaler", "distributor", "factory"]
-        orders = {role: self._calculate_order_for_role(role, state) for role in roles}
-        return {"orders": orders}
+        return {"orders": {role: self._calculate_order_for_role(role, state) for role in roles}}
 
 
 # --- FastAPI rakendus ---
@@ -99,22 +71,16 @@ beer_bot = BeerBot()
 
 @app.post("/api/decision")
 async def handle_decision(request: Request):
-    """
-    Põhiline API otspunkt.
-    """
     state = await request.json()
-
     if state.get("handshake"):
         return {
             "ok": True,
-            "student_email": "jaakta@taltech.ee", # MUUDA SEE ÄRA!
-            "algorithm_name": "Coordinated Glassbox v1.0", # Uus nimi!
-            "version": "v1.3.0",
-            # SOOVITUS #3: Deklareerime, et toetame nüüd Glassboxi!
+            "student_email": "eesnimi.perenimi@taltech.ee", # MUUDA SEE ÄRA!
+            "algorithm_name": "Stabilized Glassbox v3.0",
+            "version": "v1.5.0",
             "supports": {"blackbox": False, "glassbox": True},
             "message": "BeerBot ready"
         }
-    
     return beer_bot.get_orders(state)
 
 @app.get("/")
