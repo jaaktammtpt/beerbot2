@@ -118,7 +118,7 @@ async def handle_decision(request: Request):
     if state.get("handshake"):
         return {
             "ok": True,
-            "student_email": "eesnimi.perenimi@taltech.ee", # MUUDA SEE ÄRA!
+            "student_email": "jaakta@taltech.ee", # MUUDA SEE ÄRA!
             "algorithm_name": "Smoothed Q-Model Blackbox",
             "version": "v1.2.1",
             "supports": {"blackbox": True, "glassbox": False},
