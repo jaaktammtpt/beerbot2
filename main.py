@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 OPTIMIZED_Q_VALUES = {
     "retailer": 1.15,
     "wholesaler": 1.35,
-    "distributor": 1.7,
+    "distributor": 1.75,
     "factory": 1.85, # Tehas vajab veidi rohkem pikema tootmistsükli tõttu
 }
 
