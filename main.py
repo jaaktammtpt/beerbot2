@@ -6,10 +6,10 @@ from fastapi import FastAPI, Request
 # SOOVITUS #1: Q-väärtused on drastiliselt vähendatud, kuna süsteem on stabiilne.
 # Eesmärk on hoida minimaalset varu, mis on vajalik tarnetsükli katmiseks.
 OPTIMIZED_Q_VALUES = {
-    "retailer": 0.5,
-    "wholesaler": 0.7,
-    "distributor": 0.9,
-    "factory": 1.1, # Tehas vajab veidi rohkem pikema tootmistsükli tõttu
+    "retailer": 0.9,
+    "wholesaler": 1.1,
+    "distributor": 1.3,
+    "factory": 1.6, # Tehas vajab veidi rohkem pikema tootmistsükli tõttu
 }
 
 # Jätame reageerimiskiiruse kõrgeks.
@@ -107,7 +107,7 @@ async def handle_decision(request: Request):
     if state.get("handshake"):
         return {
             "ok": True,
-            "student_email": "eesnimi.perenimi@taltech.ee", # MUUDA SEE ÄRA!
+            "student_email": "jaakta@taltech.ee", # MUUDA SEE ÄRA!
             "algorithm_name": "Coordinated Glassbox v1.0", # Uus nimi!
             "version": "v1.3.0",
             # SOOVITUS #3: Deklareerime, et toetame nüüd Glassboxi!
