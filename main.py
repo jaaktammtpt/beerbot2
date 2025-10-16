@@ -7,8 +7,8 @@ from fastapi import FastAPI, Request
 # Eesmärk on hoida minimaalset varu, mis on vajalik tarnetsükli katmiseks.
 OPTIMIZED_Q_VALUES = {
     "retailer": 1.55, #1.55
-    "wholesaler": 2.45, #2.35
-    "distributor": 3.15, #3.15
+    "wholesaler": 2.5, #2.45
+    "distributor": 3.2, #3.15
     "factory": 2.0, # 2.0 Tehas vajab veidi rohkem pikema tootmistsükli tõttu
 }
 
