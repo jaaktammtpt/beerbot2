@@ -6,10 +6,10 @@ from fastapi import FastAPI, Request
 # SOOVITUS #1: Q-väärtused on seatud, et saavutada parem tasakaal, tuginedes
 # varasemale edukale mudelile (kogukulu 6786). Eesmärk on vähendada võlgnevuse kulu.
 OPTIMIZED_Q_VALUES = {
-    "retailer": 1.5,
-    "wholesaler": 1.8,
-    "distributor": 2.1,
-    "factory": 2.5,
+    "retailer": 1.1,
+    "wholesaler": 1.3,
+    "distributor": 1.5,
+    "factory": 1.8,
 }
 
 # Tagasi lihtsa ja stabiilse prognoosimise juurde.
