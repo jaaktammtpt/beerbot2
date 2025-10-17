@@ -16,7 +16,7 @@ OPTIMIZED_Q_VALUES = {
 MOVING_AVERAGE_PERIOD = 4
 
 # SOOVITUS #2: Lühendame silumisperioodi, kuna glassbox süsteem stabiliseerub kiiremini.
-SMOOTHING_PERIOD = 3
+SMOOTHING_PERIOD = 4
 
 
 class BeerBot:
