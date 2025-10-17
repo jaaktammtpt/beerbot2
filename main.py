@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 # SOOVITUS #1: Q-väärtused on drastiliselt vähendatud, kuna süsteem on stabiilne.
 # Eesmärk on hoida minimaalset varu, mis on vajalik tarnetsükli katmiseks.
 OPTIMIZED_Q_VALUES = {
-    "retailer": 1.7, #1.60
+    "retailer": 1.75, #1.60
     "wholesaler": 2.8, #2.5 
     "distributor": 3.35, #3.25
     "factory": 2.0, # 2.0  Tehas vajab veidi rohkem pikema tootmistsükli tõttu
