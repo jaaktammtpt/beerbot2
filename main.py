@@ -20,7 +20,7 @@ Q_BLACKBOX = {
     "retailer": 2.4, # 2.4
     "wholesaler": 3.2, # 3.2
     "distributor": 5.3, # 5.3
-    "factory": 2.4 # 2.5
+    "factory": 2.3 # 2.4
 }
 
 roles = ["retailer", "wholesaler", "distributor", "factory"]
