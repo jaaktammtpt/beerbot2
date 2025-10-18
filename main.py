@@ -17,9 +17,9 @@ Q_GLASSBOX = {
 }
 
 Q_BLACKBOX = {
-    "retailer": 2.2, # 2.4
-    "wholesaler": 3.0, # 3.3
-    "distributor": 5.3, # 5.7
+    "retailer": 2.4, # 2.4
+    "wholesaler": 3.3, # 3.3
+    "distributor": 5.7, # 5.7
     "factory": 2.0 # 2.0
 }
 
@@ -81,31 +81,9 @@ class BeerBot:
         inv_position = inventory - backlog + pipeline
         adjustment = damping * (target - inv_position)
 
-        # esmane tellimus
-        order = demand + adjustment
-
-        # ---------------------------------------------------------
-        # RATE LIMITER — ainult blackboxile!
-        # piirame kui kiiresti tellimus tohib muutuda nädalast nädalasse
-        # ---------------------------------------------------------
-        if mode == "blackbox" and len(weeks) > 1:
-            prev_order = weeks[-1]["orders"].get(role, 0)
-            MAX_REL_CHANGE = 0.5  # 50% max muutus
-            max_change = max(1, int(prev_order * MAX_REL_CHANGE))
-            delta = order - prev_order
-
-            if delta > max_change:
-                order = prev_order + max_change
-            elif delta < -max_change:
-                order = prev_order - max_change
-
-            # floor/ceil ja mitte negatiivne
-            order = max(0, math.ceil(order))
-        else:
-            order = max(0, math.ceil(order))
-
+        # lõplik tellimus
+        order = max(0, math.ceil(demand + adjustment))
         return order
-
 
     # ---------------------------------------------------------
     def get_orders(self, state):
