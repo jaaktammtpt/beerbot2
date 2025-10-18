@@ -7,7 +7,7 @@ app = FastAPI(docs_url=None, redoc_url=None)
 FORECAST_WINDOW = 4
 SMOOTHING_PERIOD = 3
 DAMPING_GLASS = 0.25        # summutus glassboxile optimaalne väärtus
-DAMPING_BLACK = 0.30        # blackbox pisut tugevam amort (võib hiljem timmida) 0.20
+DAMPING_BLACK = 0.20        # blackbox pisut tugevam amort (võib hiljem timmida) 0.20
 
 Q_GLASSBOX = {
     "retailer": 1.8,
