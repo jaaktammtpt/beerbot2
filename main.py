@@ -3,19 +3,19 @@ from fastapi import FastAPI, Request
 
 app = FastAPI(docs_url=None, redoc_url=None)
 
-# --- Konstandid ---
-FORECAST_WINDOW = 4      # Moving average horizon
-SMOOTHING_PERIOD = 3     # Soft start smoothing
-Z_BLACKBOX = 0.25        # smaller safety param for stable blackbox
-Z_GLASSBOX = 0.25        # same for uniformity
+# --- parameetrid ---
+FORECAST_WINDOW = 4
+SMOOTHING_PERIOD = 3
+DAMPING_GLASS = 0.25        # summutus glassboxile optimaalne väärtus
+DAMPING_BLACK = 0.20        # blackbox pisut tugevam amort (võib hiljem timmida)
 
-# --- Target multipliers per role (Q-values) ---
 Q_GLASSBOX = {
     "retailer": 1.8,
     "wholesaler": 3.1,
     "distributor": 4.75,
     "factory": 2.0
 }
+
 Q_BLACKBOX = {
     "retailer": 2.0,
     "wholesaler": 3.0,
@@ -25,92 +25,98 @@ Q_BLACKBOX = {
 
 roles = ["retailer", "wholesaler", "distributor", "factory"]
 
+
 class BeerBot:
-
-    # --------------------------------------------------
-    # FORECAST LOGIC
-    # --------------------------------------------------
-    def _forecast_blackbox(self, weeks, role):
-        """Blackbox: only sees its own demand + backlog."""
-        history = []
-        for w in weeks:
-            r = w["roles"][role]
-            history.append(r["incoming_orders"] + r["backlog"])  # backlog-aware
-        window = history[-FORECAST_WINDOW:]
-        return sum(window) / len(window) if window else 4.0
-
+    # ---------------------------------------------------------
+    # FORECASTID
+    # ---------------------------------------------------------
     def _forecast_glassbox(self, weeks):
-        """Glassbox: uses final consumer demand (retailer)."""
+        """Glassbox: kasutab jaemüüja tegelikku turu nõudlust."""
         history = [w["roles"]["retailer"]["incoming_orders"] for w in weeks]
         window = history[-FORECAST_WINDOW:]
         return sum(window) / len(window) if window else 4.0
 
-    # --------------------------------------------------
-    # ORDER COMPUTATION
-    # --------------------------------------------------
+    def _forecast_blackbox(self, weeks, role):
+        """Blackbox: kasutab ainult oma rolli nähtavaid numbreid."""
+        history = []
+        for w in weeks:
+            d = w["roles"][role]["incoming_orders"]
+            history.append(d)
+        window = history[-FORECAST_WINDOW:]
+        return sum(window) / len(window) if window else 4.0
+
+    # ---------------------------------------------------------
+    # ORDER LOGIC
+    # ---------------------------------------------------------
     def _compute_order(self, role, state, mode):
         weeks = state["weeks"]
-        week = state["week"]
+        current_week = state["week"]
         role_data = weeks[-1]["roles"][role]
+
         inventory = role_data["inventory"]
         backlog = role_data["backlog"]
 
-        # pipeline approximation (previous orders in last 3 weeks)
-        pipeline = sum(
-            w["orders"].get(role, 0)
-            for w in weeks[-4:-1]
-        ) if week > 1 else 0
+        # pipeline = viimaste 3 nädala tellimused
+        if current_week > 1:
+            pipeline = sum(w["orders"].get(role, 0) for w in weeks[-4:-1])
+        else:
+            pipeline = 0
 
-        # forecast
+        # forecast vastavalt mode'ile
         if mode == "glassbox":
             demand = self._forecast_glassbox(weeks)
             q = Q_GLASSBOX[role]
-            z = Z_GLASSBOX
-        else:
+            damping = DAMPING_GLASS
+        else:   # blackbox
             demand = self._forecast_blackbox(weeks, role)
             q = Q_BLACKBOX[role]
-            z = Z_BLACKBOX
+            damping = DAMPING_BLACK
 
-        # smooth ramp up for first weeks
-        if week < SMOOTHING_PERIOD:
-            q *= (week / SMOOTHING_PERIOD)
+        # smoothing esimestel nädalatel
+        if current_week < SMOOTHING_PERIOD:
+            q *= (current_week / SMOOTHING_PERIOD)
 
-        # target inventory position
-        target = q * demand + z * demand
-        position = inventory - backlog + pipeline
-        order = max(0, math.ceil(demand + (target - position)))
+        # target inventory ja adjustment
+        target = q * demand
+        inv_position = inventory - backlog + pipeline
+        adjustment = damping * (target - inv_position)
 
+        # lõplik tellimus
+        order = max(0, math.ceil(demand + adjustment))
         return order
 
-    # --------------------------------------------------
-    # PUBLIC INTERFACE
-    # --------------------------------------------------
+    # ---------------------------------------------------------
     def get_orders(self, state):
-        mode = state.get("mode", "blackbox")  # fallback if missing
-        result = {r: self._compute_order(r, state, mode) for r in roles}
-        return {"orders": result}
+        mode = state.get("mode", "blackbox")  # kui puudub, loetakse blackbox
+        orders = {r: self._compute_order(r, state, mode) for r in roles}
+        return {"orders": orders}
+
 
 beer_bot = BeerBot()
 
 
-# --- MAIN HANDLER ---
+# ---------------------------------------------------------
+# API HANDLER
+# ---------------------------------------------------------
 @app.post("/api/decision")
-async def decision(request: Request):
-    payload = await request.json()
+async def handle(request: Request):
+    data = await request.json()
 
-    if payload.get("handshake"):
+    # Handshake
+    if data.get("handshake"):
         return {
             "ok": True,
             "student_email": "jaakta@taltech.ee",
             "algorithm_name": "HybridGlassBlack-v1",
-            "version": "v1.0.0",
+            "version": "v1.1.0",
             "supports": {"blackbox": True, "glassbox": True},
             "message": "BeerBot ready"
         }
 
-    return beer_bot.get_orders(payload)
+    # Actual order calculation
+    return beer_bot.get_orders(data)
 
 
 @app.get("/")
 def root():
-    return {"message": "BeerBot Up — try POST /api/decision"}
+    return {"message": "BeerBot API töötab. Kasuta POST /api/decision"}
