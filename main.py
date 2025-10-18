@@ -18,8 +18,8 @@ Q_GLASSBOX = {
 
 Q_BLACKBOX = {
     "retailer": 2.4, # 2.4
-    "wholesaler": 3.1, # 3.1
-    "distributor": 5.0, # 4.85
+    "wholesaler": 3.2, # 3.1
+    "distributor": 5.0, # 5.0
     "factory": 2.5
 }
 
