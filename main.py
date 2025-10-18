@@ -79,7 +79,11 @@ class BeerBot:
         inventory_position = inventory - backlog + pipeline
         
         # 4. Arvuta tellimus
-        order = demand_forecast + (target_inventory - inventory_position)
+        # order = demand_forecast + (target_inventory - inventory_position)
+        damping = 0.25
+        adjustment = damping * (target_inventory - inventory_position)
+        order = demand_forecast + adjustment
+
 
         return max(0, math.ceil(order))
 
