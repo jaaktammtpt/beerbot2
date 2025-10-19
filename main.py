@@ -17,12 +17,13 @@ Q_GLASSBOX = {
 }
 
 Q_BLACKBOX = {
-    "retailer": 2.4, # 2.4
-    "wholesaler": 3.3, # 3.3
-    "distributor": 5.7, # 5.7
-    "factory": 2.0 # 2.0
+    "retailer": 2.4,
+    "wholesaler": 3.3,
+    "distributor": 5.7,
+    "factory": 2.0
 }
 
+# mängu rollid
 roles = ["retailer", "wholesaler", "distributor", "factory"]
 
 
@@ -53,16 +54,22 @@ class BeerBot:
         current_week = state["week"]
         role_data = weeks[-1]["roles"][role]
 
+        # TEGELIK INVENTORY SEIS
         inventory = role_data["inventory"]
         backlog = role_data["backlog"]
 
         # pipeline = viimaste 3 nädala tellimused
+        # "pipeline" = viimaste nädalate juba esitatud, aga veel kohale jõudmata tellimused.
+        # See aitab vältida topelt-tellimist olukorras, kus kaup on juba teel.
         if current_week > 1:
             pipeline = sum(w["orders"].get(role, 0) for w in weeks[-4:-1])
         else:
             pipeline = 0
 
         # forecast vastavalt mode'ile
+        # MODE PÕHINE ERINEVUS
+        # Glassbox = näeb jaeklientide tegelikku nõudlust → puhtam signaal
+        # Blackbox = näeb ainult enda incoming_orders → viitega ja müraga signaal
         if mode == "glassbox":
             demand = self._forecast_glassbox(weeks)
             q = Q_GLASSBOX[role]
@@ -72,16 +79,22 @@ class BeerBot:
             q = Q_BLACKBOX[role]
             damping = DAMPING_BLACK
 
-        # smoothing esimestel nädalatel
+        # Smoothing esimestel nädalatel – süsteem ei reageeri üle enne,
+        # kui on kogunenud kujundlik "pilt" nõudluse tegelikust tasemest
         if current_week < SMOOTHING_PERIOD:
             q *= (current_week / SMOOTHING_PERIOD)
 
         # target inventory ja adjustment
+        # sihtvaru = kui palju tegelikult *peaks* riiulis olema
         target = q * demand
+
+        # inventory position = (praegu olemas) - (võlg) + (teel olev kaup)
         inv_position = inventory - backlog + pipeline
+
+        # adjustment = kui palju tuleb liikuda sihtvaru suunas
         adjustment = damping * (target - inv_position)
 
-        # lõplik tellimus
+        # lõplik tellimus = algnõudlus + korrigeeriv liikumine sihttaseme poole
         order = max(0, math.ceil(demand + adjustment))
         return order
 
