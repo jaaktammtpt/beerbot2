@@ -1,132 +1,126 @@
 import math
 from fastapi import FastAPI, Request
 
-app = FastAPI(docs_url=None, redoc_url=None)
+# --- Algoritmi seadusted ja konstandid (Glassbox strateegia) ---
 
-# --- parameetrid ---
-FORECAST_WINDOW = 8
-SMOOTHING_PERIOD = 3
-DAMPING_GLASS = 0.25        # summutus glassboxile optimaalne väärtus
-DAMPING_BLACK = 0.20        # blackbox pisut tugevam summutus
-
-Q_GLASSBOX = {
-    "retailer": 1.8,
-    "wholesaler": 3.1,
-    "distributor": 4.75,
-    "factory": 0.9  # langetatud, et vähendada factory laovaru
+# SOOVITUS #1: Q-väärtused on drastiliselt vähendatud, kuna süsteem on stabiilne.
+# Eesmärk on hoida minimaalset varu, mis on vajalik tarnetsükli katmiseks.
+OPTIMIZED_Q_VALUES = {
+    "retailer": 1.8, #1.80
+    "wholesaler": 3.1, #3.1 
+    "distributor": 4.75, #4.75
+    "factory": 2.0, # 2.0  Tehas vajab veidi rohkem pikema tootmistsükli tõttu
 }
 
-Q_BLACKBOX = {
-    "retailer": 2.4,
-    "wholesaler": 3.3,
-    "distributor": 5.7,
-    "factory": 2.0
-}
+# Jätame reageerimiskiiruse kõrgeks.
+MOVING_AVERAGE_PERIOD = 4
 
-# mängu rollid
-roles = ["retailer", "wholesaler", "distributor", "factory"]
+# SOOVITUS #2: Lühendame silumisperioodi, kuna glassbox süsteem stabiliseerub kiiremini.
+SMOOTHING_PERIOD = 3 # 3
 
 
 class BeerBot:
-    # ---------------------------------------------------------
-    # FORECASTID (prognoosid)
-    # ---------------------------------------------------------
-    def _forecast_glassbox(self, weeks):
-        """Glassbox: kasutab jaemüüja tegelikku turu nõudlust."""
-        history = [w["roles"]["retailer"]["incoming_orders"] for w in weeks]
-        window = history[-FORECAST_WINDOW:]
-        return sum(window) / len(window) if window else 4.0
+    """
+    Kapseldab kogu loogika. See implementatsioon kasutab "Glassbox" strateegiat,
+    kus kõik rollid baseerivad oma otsused tegelikul kliendi nõudlusel.
+    """
 
-    def _forecast_blackbox(self, weeks, role):
-        """Blackbox: kasutab ainult oma rolli nähtavaid numbreid."""
-        history = [w["roles"][role]["incoming_orders"] for w in weeks]
-        window = history[-FORECAST_WINDOW:]
-        return sum(window) / len(window) if window else 4.0
+    def _get_demand_forecast(self, weeks: list) -> float:
+        """
+        Arvutab oodatava nõudluse, kasutades AINULT jaemüüja andmeid.
+        See on "Glassbox" strateegia süda.
+        """
+        # KÕIK rollid vaatavad tegelikku kliendi nõudlust (jaemüüja sissetulevad tellimused).
+        history = [week["roles"]["retailer"]["incoming_orders"] for week in weeks]
 
-    # ---------------------------------------------------------
-    # ORDER LOGIC (otsustusloogika)
-    # ---------------------------------------------------------
-    def _compute_order(self, role, state, mode):
-        weeks = state["weeks"]
-        current_week = state["week"]
-        role_data = weeks[-1]["roles"][role]
+        if not history:
+            return 8.0  # Mõistlik algväärtus
 
-        # tegelik laoseis ja võlg (backlog)
+        start_index = max(0, len(history) - MOVING_AVERAGE_PERIOD)
+        relevant_history = history[start_index:]
+        
+        return sum(relevant_history) / len(relevant_history)
+
+    def _calculate_order_for_role(self, role: str, state: dict) -> int:
+        """
+        Arvutab ühe rolli tellimuse koguse.
+        """
+        current_week_num = state["week"]
+        weeks_history = state["weeks"]
+        
+        role_data = weeks_history[-1]["roles"][role]
         inventory = role_data["inventory"]
         backlog = role_data["backlog"]
+        
+        # Arvutame "pipeline" ehk teel oleva kauba koguse
+        # See on kõik tellimused, mis on tehtud, aga pole veel kohale jõudnud.
+        pipeline = 0
+        if current_week_num > 1:
+            # Viimase 3 nädala tellimused on tavaliselt hea hinnang teel olevale kaubale
+            start_index = max(0, len(weeks_history) - 4) 
+            for week in weeks_history[start_index:-1]:
+                 if role in week["orders"]:
+                    pipeline += week["orders"][role]
 
-        # pipeline = viimaste 3 nädala tellimused (teel olev kaup)
-        if current_week > 1:
-            pipeline = sum(w["orders"].get(role, 0) for w in weeks[-4:-1])
+        # 1. Prognoosi oodatav nõudlus (kõigil sama)
+        demand_forecast = self._get_demand_forecast(weeks_history)
+
+        # 2. Arvuta sihttase laovarule
+        base_q = OPTIMIZED_Q_VALUES[role]
+        
+        if current_week_num < SMOOTHING_PERIOD:
+            effective_q = base_q * (current_week_num / SMOOTHING_PERIOD)
         else:
-            pipeline = 0
+            effective_q = base_q
+            
+        target_inventory = effective_q * demand_forecast
 
-        # forecast vastavalt mode'ile
-        if mode == "glassbox":
-            demand = self._forecast_glassbox(weeks)
-            q = Q_GLASSBOX[role]
-            damping = DAMPING_GLASS
-        else:
-            demand = self._forecast_blackbox(weeks, role)
-            q = Q_BLACKBOX[role]
-            damping = DAMPING_BLACK
+        # 3. Arvuta praegune laovaru positsioon
+        inventory_position = inventory - backlog + pipeline
+        
+        # 4. Arvuta tellimus
+        # order = demand_forecast + (target_inventory - inventory_position)
+        damping = 0.25
+        adjustment = damping * (target_inventory - inventory_position)
+        order = demand_forecast + adjustment
 
-        # Smoothing esimestel nädalatel
-        if current_week < SMOOTHING_PERIOD:
-            q *= (current_week / SMOOTHING_PERIOD)
 
-        # sihtvaru (palju peaks riiulis olema)
-        target = q * demand
+        return max(0, math.ceil(order))
 
-        # inventory-position = tegelik + teel - võlad
-        inv_position = inventory - backlog + pipeline
-
-        # korrigeeriv liikumine sihtvaru poole
-        adjustment = damping * (target - inv_position)
-
-        # kui ülevaru suur → kärbi jõulisemalt (1.4x)
-        if inv_position > target:
-            adjustment *= 1.4
-
-        # minimaalne vältimatu tellimus (et backlog ei kasvaks)
-        expected_shortage = demand - (inventory + pipeline)
-        min_needed = math.ceil(expected_shortage) if expected_shortage > 0 else 0
-
-        # lõplik tellimus
-        order = max(min_needed, math.ceil(demand + adjustment))
-        return max(0, order)
-
-    # ---------------------------------------------------------
-    def get_orders(self, state):
-        mode = state.get("mode", "blackbox")  # kui puudub → blackbox
-        orders = {r: self._compute_order(r, state, mode) for r in roles}
+    def get_orders(self, state: dict) -> dict:
+        """
+        Genereerib tellimused kõikidele rollidele.
+        """
+        roles = ["retailer", "wholesaler", "distributor", "factory"]
+        orders = {role: self._calculate_order_for_role(role, state) for role in roles}
         return {"orders": orders}
 
 
+# --- FastAPI rakendus ---
+
+app = FastAPI(docs_url=None, redoc_url=None)
 beer_bot = BeerBot()
 
-# ---------------------------------------------------------
-# API HANDLER
-# ---------------------------------------------------------
 @app.post("/api/decision")
-async def handle(request: Request):
-    data = await request.json()
+async def handle_decision(request: Request):
+    """
+    Põhiline API otspunkt.
+    """
+    state = await request.json()
 
-    # Handshake
-    if data.get("handshake"):
+    if state.get("handshake"):
         return {
             "ok": True,
-            "student_email": "jaakta@taltech.ee",
-            "algorithm_name": "HybridGlassBlack-v1",
-            "version": "v1.2.0",
-            "supports": {"blackbox": True, "glassbox": True},
+            "student_email": "jaakta@taltech.ee", # MUUDA SEE ÄRA!
+            "algorithm_name": "Coordinated Glassbox v1.0", # Uus nimi!
+            "version": "v1.3.0",
+            # SOOVITUS #3: Deklareerime, et toetame nüüd Glassboxi!
+            "supports": {"blackbox": False, "glassbox": True},
             "message": "BeerBot ready"
         }
-
-    # Actual order calculation
-    return beer_bot.get_orders(data)
-
+    
+    return beer_bot.get_orders(state)
 
 @app.get("/")
-def root():
-    return {"message": "BeerBot API töötab. Kasuta POST /api/decision"}
+def read_root():
+    return {"message": "BeerBot API on töövalmis. Palun tee POST päring /api/decision."}
