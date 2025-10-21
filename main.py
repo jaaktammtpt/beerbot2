@@ -51,33 +51,56 @@ class BeerBot:
     # ---------------------------------------------------------
     # TELLIMUSE ARVUTUS
     # ---------------------------------------------------------
-def _compute_order(self, role, demand, inventory, backlog, pipeline):
-    """
-    Compute order quantity using damped target-based policy with asymmetric correction
-    (blackbox version, tuned to reduce backlog while still controlling inventory)
-    """
-    q = self.q_params[role]
-    damping = self.damping
+def _compute_order(self, role, state, mode):
+    import math
 
-    # Target inventory based on forecasted demand
+    weeks = state["weeks"]
+    current_week = state["week"]
+    role_data = weeks[-1]["roles"][role]
+
+    # tegelik inventory / backlog
+    inventory = role_data["inventory"]
+    backlog = role_data["backlog"]
+
+    # pipeline = viimaste 3 nädala tellimused (teel olev kaup)
+    if current_week > 1:
+        pipeline = sum(w["orders"].get(role, 0) for w in weeks[-4:-1])
+    else:
+        pipeline = 0
+
+    # forecast vastavalt mode'ile
+    if mode == "glassbox":
+        demand = self._forecast_glassbox(weeks)
+        q = Q_GLASSBOX[role]
+        damping = DAMPING_GLASS
+    else:
+        demand = self._forecast_blackbox(weeks, role)
+        q = Q_BLACKBOX[role]
+        damping = DAMPING_BLACK
+
+    # Smoothing esimestel nädalatel
+    if current_week < SMOOTHING_PERIOD:
+        q *= (current_week / SMOOTHING_PERIOD)
+
+    # Target inventory
     target = q * demand
     inv_position = inventory - backlog + pipeline
 
-    # Base correction toward target
+    # correction
     adjustment = damping * (target - inv_position)
 
-    # Pehmem ülevaru vähendamine (varem 1.8 -> nüüd 1.4)
+    # Pehmem ülevaru vähendamine (1.4x)
     if inv_position > target:
         adjustment *= 1.4
 
-    # Tagame, et ei vähenda tellimusi alla miiniumvajaduse → vähendab backlog’i
+    # Minimaalne tellimus, et backlog ei kasvaks
     expected_shortage = demand - (inventory + pipeline)
     min_needed = math.ceil(expected_shortage) if expected_shortage > 0 else 0
 
-    # Lõplik tellimus
+    # lõplik tellimus
     order = max(min_needed, math.ceil(demand + adjustment))
+    return max(0, order)
 
-    # ohutus: negatiivseid ei l
 
 
     # ---------------------------------------------------------
