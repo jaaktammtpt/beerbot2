@@ -51,51 +51,34 @@ class BeerBot:
     # ---------------------------------------------------------
     # TELLIMUSE ARVUTUS
     # ---------------------------------------------------------
-    def _compute_order(self, role, state, mode):
-        weeks = state["weeks"]
-        current_week = state["week"]
-        role_data = weeks[-1]["roles"][role]
+def _compute_order(self, role, demand, inventory, backlog, pipeline):
+    """
+    Compute order quantity using damped target-based policy with asymmetric correction
+    (blackbox version, tuned to reduce backlog while still controlling inventory)
+    """
+    q = self.q_params[role]
+    damping = self.damping
 
-        # tegelik laovaru + võimalik tarnimata võlg
-        inventory = role_data["inventory"]
-        backlog = role_data["backlog"]
+    # Target inventory based on forecasted demand
+    target = q * demand
+    inv_position = inventory - backlog + pipeline
 
-        # pipeline = viimase 3 nädala tellimused, mis on "teel"
-        if current_week > 1:
-            pipeline = sum(w["orders"].get(role, 0) for w in weeks[-4:-1])
-        else:
-            pipeline = 0
+    # Base correction toward target
+    adjustment = damping * (target - inv_position)
 
-        # Glassbox vs Blackbox
-        if mode == "glassbox":
-            demand = self._forecast_glassbox(weeks)
-            q = Q_GLASSBOX[role]
+    # Pehmem ülevaru vähendamine (varem 1.8 -> nüüd 1.4)
+    if inv_position > target:
+        adjustment *= 1.4
 
-            # TEHASEL väike summutus → kiirem kohanemine
-            damping = 0.20 if role == "factory" else DAMPING_GLASS
-        else:  # blackbox
-            demand = self._forecast_blackbox(weeks, role)
-            q = Q_BLACKBOX[role]
-            damping = DAMPING_BLACK
+    # Tagame, et ei vähenda tellimusi alla miiniumvajaduse → vähendab backlog’i
+    expected_shortage = demand - (inventory + pipeline)
+    min_needed = math.ceil(expected_shortage) if expected_shortage > 0 else 0
 
-        # Smoothing esimestel nädalatel – Q kasvab järk-järgult
-        if current_week < SMOOTHING_PERIOD:
-            q *= (current_week / SMOOTHING_PERIOD)
+    # Lõplik tellimus
+    order = max(min_needed, math.ceil(demand + adjustment))
 
-        # target inventory ja adjustment
-        target = q * demand
-        inv_position = inventory - backlog + pipeline
-        adjustment = damping * (target - inv_position)
+    # ohutus: negatiivseid ei l
 
-        # --- ASÜMMEETRILINE INVENTORY REDUKTSIOON ---
-        # Kui oleme üle sihitaseme, tugevdame vähendavat efekti.
-        # See aitab tehase lao "rasva" maha võtta.
-        if inv_position > target:
-            adjustment *= 1.8
-
-        # lõplik tellimus
-        order = max(0, math.ceil(demand + adjustment))
-        return order
 
     # ---------------------------------------------------------
     # ORDERID KÕIGILE ROLLIDELE
