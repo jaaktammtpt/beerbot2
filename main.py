@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 app = FastAPI(docs_url=None, redoc_url=None)
 
 # --- parameetrid ---
-FORECAST_WINDOW = 4
+FORECAST_WINDOW = 8
 SMOOTHING_PERIOD = 3
 DAMPING_GLASS = 0.25        # summutus glassboxile optimaalne väärtus
 DAMPING_BLACK = 0.20        # blackbox pisut tugevam summutus
