@@ -82,14 +82,16 @@ class BeerBot:
         if current_week < SMOOTHING_PERIOD:
             q *= (current_week / SMOOTHING_PERIOD)
 
-        # sihtvaru (eesmärk)
+        # target inventory ja adjustment
         target = q * demand
-
-        # inventory position = reaalselt + teel − võlg
         inv_position = inventory - backlog + pipeline
-
-        # korrigeeriv liikumine sihttaseme poole
         adjustment = damping * (target - inv_position)
+
+        # --- ASÜMMEETRILINE INVENTORY REDUKTSIOON ---
+        # Kui oleme üle sihitaseme, tugevdame vähendavat efekti.
+        # See aitab tehase lao "rasva" maha võtta.
+        if inv_position > target:
+            adjustment *= 1.8
 
         # lõplik tellimus
         order = max(0, math.ceil(demand + adjustment))
